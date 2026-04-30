@@ -1,0 +1,22 @@
+node_modules/
+dist/
+
+# Rust / Tauri build
+src-tauri/target/
+src-tauri/gen/
+
+# whisper.cpp build artifacts (rebuild via scripts/build-whisper.sh)
+.whisper-build/
+src-tauri/binaries/
+
+# Whisper models (downloaded at runtime, large)
+*.bin
+
+# Local recordings
+*.wav
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp

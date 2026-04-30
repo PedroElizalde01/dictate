@@ -1,0 +1,94 @@
+html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; font-family: ui-sans-serif, system-ui, sans-serif; }
+#root { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+
+.pill {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: oklch(0.16 0.012 275 / 0.92);
+  border: 1px solid oklch(0.55 0.20 25 / 0.55);
+  box-shadow: 0 8px 32px oklch(0 0 0 / 0.5);
+  backdrop-filter: blur(12px);
+  color: oklch(0.96 0.005 275);
+  overflow: hidden;
+  height: 36px;
+  width: 200px;
+  border-radius: 999px;
+  transform-origin: center;
+  transition:
+    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-radius 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 200ms ease-out,
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    border-color 220ms ease-out;
+}
+
+.pill.enter {
+  width: 0;
+  opacity: 0;
+  transform: scaleX(0.2);
+  border-color: oklch(0.36 0.10 285 / 0.4);
+}
+.pill.recording {
+  width: 200px;
+  height: 36px;
+  border-radius: 999px;
+  opacity: 1;
+  transform: scale(1);
+  border-color: oklch(0.55 0.20 25 / 0.6);
+}
+.pill.transcribing {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  opacity: 1;
+  transform: scale(1);
+  border-color: oklch(0.36 0.10 285 / 0.55);
+}
+.pill.exit {
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transform: scale(0.2);
+  border-radius: 50%;
+}
+
+.bars {
+  position: absolute;
+  inset: 0;
+  display: flex; gap: 3px; align-items: center; justify-content: space-between;
+  padding: 0 16px;
+  opacity: 1;
+  transition: opacity 160ms ease-out;
+}
+.pill.transcribing .bars,
+.pill.exit .bars,
+.pill.enter .bars { opacity: 0; }
+
+.bar {
+  display: block;
+  flex: 1 1 0;
+  min-width: 2px;
+  max-width: 4px;
+  height: 12%;
+  background: linear-gradient(to top, oklch(0.66 0.21 285), oklch(0.66 0.22 25));
+  border-radius: 2px;
+  transition: height 60ms linear;
+}
+
+.spinner-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid; place-items: center;
+  opacity: 0;
+  transition: opacity 200ms ease-out 60ms;
+}
+.pill.transcribing .spinner-wrap { opacity: 1; }
+
+.spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid oklch(0.66 0.21 285 / 0.25);
+  border-top-color: oklch(0.78 0.16 285);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }

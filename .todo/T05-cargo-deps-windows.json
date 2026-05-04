@@ -1,0 +1,38 @@
+{
+  "id": "T05",
+  "title": "Add Windows-only Cargo deps (windows + enigo)",
+  "status": "todo",
+  "effort": "XS",
+  "depends_on": [
+    "T01"
+  ],
+  "context": {
+    "file": "src-tauri/Cargo.toml",
+    "goal": "Add target-cfg dependencies so they only compile on Windows builds, keeping Linux footprint identical."
+  },
+  "deps_to_add": [
+    {
+      "crate": "windows",
+      "version": "0.58",
+      "features": "[\"Win32_UI_WindowsAndMessaging\", \"Win32_UI_Input_KeyboardAndMouse\", \"Win32_Foundation\"]"
+    },
+    {
+      "crate": "enigo",
+      "version": "0.2",
+      "features": "default"
+    }
+  ],
+  "cargo_toml_block": "[target.'cfg(target_os = \"windows\")'.dependencies]\nwindows = { version = \"0.58\", features = [\"Win32_UI_WindowsAndMessaging\", \"Win32_UI_Input_KeyboardAndMouse\", \"Win32_Foundation\"] }\nenigo = \"0.2\"",
+  "steps": [
+    "Append the cargo_toml_block above the [profile.release] section in src-tauri/Cargo.toml",
+    "Run `cargo check` on Linux to confirm no resolution conflict (deps will not be downloaded for non-windows targets)",
+    "If cross toolchain available, run `cargo check --target x86_64-pc-windows-msvc` to confirm crates resolve"
+  ],
+  "acceptance": [
+    "Linux `cargo check` exit 0, no new deps in Cargo.lock for linux platform compile",
+    "Cargo.lock updated with windows + enigo entries (will populate on first windows build)"
+  ],
+  "files_touched": [
+    "src-tauri/Cargo.toml"
+  ]
+}

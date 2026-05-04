@@ -1,0 +1,92 @@
+{
+  "id": "T11",
+  "title": "GitHub Actions release workflow (multi-OS bundle + tag)",
+  "status": "todo",
+  "effort": "M",
+  "depends_on": [
+    "T04",
+    "T06"
+  ],
+  "context": {
+    "goal": "On git tag push (v*), build whisper.cpp sidecar + Tauri app on ubuntu-latest and windows-latest, attach all bundle artifacts to a GitHub Release. Uses tauri-apps/tauri-action.",
+    "workflow_path": ".github/workflows/release.yml"
+  },
+  "trigger": {
+    "on": "push tags matching v*",
+    "yaml_block": "on:\n  push:\n    tags: ['v*']"
+  },
+  "jobs": [
+    {
+      "name": "release",
+      "strategy": "matrix os: [ubuntu-22.04, windows-latest]",
+      "runners": "one job per OS, fail-fast false"
+    }
+  ],
+  "job_steps": [
+    "actions/checkout@v4",
+    "Setup Node.js 20 (actions/setup-node@v4 with cache: npm)",
+    "Setup Rust stable (dtolnay/rust-toolchain@stable)",
+    "Rust cache (Swatinem/rust-cache@v2 with workspaces: src-tauri -> target)",
+    "Linux only: install system deps via apt (libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libasound2-dev libpulse-dev libssl-dev xdotool)",
+    "Windows only: nothing extra (MSVC + cmake preinstalled on windows-latest runners)",
+    "Linux: bash scripts/build-whisper.sh",
+    "Windows: pwsh scripts/build-whisper.ps1",
+    "npm ci",
+    "tauri-apps/tauri-action@v0 with tagName, releaseName, releaseBody, releaseDraft: true, prerelease: false, args: '' (Linux) / '' (Windows). The action calls `tauri build` and uploads bundle artifacts to a Release matching the tag."
+  ],
+  "env_secrets": [
+    {
+      "name": "GITHUB_TOKEN",
+      "purpose": "Provided automatically by GHA. tauri-action uses it to create/update the Release."
+    }
+  ],
+  "future_signing_placeholders": [
+    "TAURI_SIGNING_PRIVATE_KEY (for Tauri updater signature, only if updater enabled later)",
+    "TAURI_SIGNING_PRIVATE_KEY_PASSWORD",
+    "Windows code signing (sign-cli) -> deferred; document in T12 runbook as 'TODO: add WINDOWS_CERTIFICATE + WINDOWS_CERTIFICATE_PASSWORD secrets and post-build signtool step'"
+  ],
+  "artifacts_expected": [
+    {
+      "os": "Linux",
+      "filename_glob": "dictate_*_amd64.deb",
+      "bundle_path": "src-tauri/target/release/bundle/deb/"
+    },
+    {
+      "os": "Linux",
+      "filename_glob": "dictate_*_amd64.AppImage",
+      "bundle_path": "src-tauri/target/release/bundle/appimage/"
+    },
+    {
+      "os": "Linux",
+      "filename_glob": "dictate-*.x86_64.rpm",
+      "bundle_path": "src-tauri/target/release/bundle/rpm/"
+    },
+    {
+      "os": "Windows",
+      "filename_glob": "Dictate_*_x64-setup.exe",
+      "bundle_path": "src-tauri/target/release/bundle/nsis/"
+    },
+    {
+      "os": "Windows",
+      "filename_glob": "Dictate_*_x64_en-US.msi",
+      "bundle_path": "src-tauri/target/release/bundle/msi/"
+    }
+  ],
+  "complete_workflow_yaml": "name: release\non:\n  push:\n    tags: ['v*']\njobs:\n  release:\n    strategy:\n      fail-fast: false\n      matrix:\n        include:\n          - os: ubuntu-22.04\n          - os: windows-latest\n    runs-on: ${{ matrix.os }}\n    permissions:\n      contents: write\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-node@v4\n        with:\n          node-version: 20\n          cache: npm\n      - uses: dtolnay/rust-toolchain@stable\n      - uses: Swatinem/rust-cache@v2\n        with:\n          workspaces: src-tauri -> target\n      - name: Install Linux deps\n        if: matrix.os == 'ubuntu-22.04'\n        run: |\n          sudo apt-get update\n          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev \\\n            libayatana-appindicator3-dev librsvg2-dev libasound2-dev \\\n            libpulse-dev libssl-dev xdotool\n      - name: Build whisper.cpp (Linux)\n        if: matrix.os == 'ubuntu-22.04'\n        run: bash scripts/build-whisper.sh\n      - name: Build whisper.cpp (Windows)\n        if: matrix.os == 'windows-latest'\n        shell: pwsh\n        run: ./scripts/build-whisper.ps1\n      - run: npm ci\n      - uses: tauri-apps/tauri-action@v0\n        env:\n          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}\n        with:\n          tagName: ${{ github.ref_name }}\n          releaseName: 'Dictate ${{ github.ref_name }}'\n          releaseBody: 'See CHANGELOG. Windows: download the .exe (NSIS) installer. Linux: .deb / .AppImage / .rpm.'\n          releaseDraft: true\n          prerelease: false",
+  "steps": [
+    "Create .github/workflows/ directory if absent",
+    "Write release.yml with the YAML above",
+    "Commit on a feature branch; push and verify workflow appears in Actions tab (it will not run yet — no tag)",
+    "Test by pushing a throwaway tag: git tag v0.0.1-test ; git push origin v0.0.1-test. Watch run. Delete draft release + tag after.",
+    "Iterate on failures (most common: missing apt dep, sidecar path mismatch, npm ci lockfile drift)"
+  ],
+  "acceptance": [
+    "Workflow file passes GH Actions YAML lint (Actions tab shows no syntax error)",
+    "Test tag run completes both matrix legs green",
+    "Draft release contains: 1+ Linux .deb, 1+ AppImage, 1+ Windows .exe (NSIS), 1+ .msi",
+    "Each artifact downloadable and >5MB (sanity check: not an empty stub)"
+  ],
+  "files_touched": [
+    ".github/workflows/release.yml (new)"
+  ]
+}

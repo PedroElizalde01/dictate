@@ -1,0 +1,31 @@
+{
+  "id": "T03",
+  "title": "Fix whisper_binary_path for .exe suffix",
+  "status": "todo",
+  "effort": "XS",
+  "depends_on": [],
+  "context": {
+    "file": "src-tauri/src/models.rs",
+    "fn": "whisper_binary_path",
+    "current_lines": "58-84",
+    "bug": "Hardcoded filename \"whisper-cli\". On Windows the binary is \"whisper-cli.exe\" so every candidate path misses."
+  },
+  "fix_strategy": {
+    "use_constant": "std::env::consts::EXE_SUFFIX (empty string on unix, \".exe\" on windows)",
+    "helper": "let name = format!(\"whisper-cli{}\", std::env::consts::EXE_SUFFIX);",
+    "apply_to_all_candidates": "dev_bin, current_exe siblings, resource_dir candidate"
+  },
+  "steps": [
+    "Replace literal \"whisper-cli\" string usages with format!() using EXE_SUFFIX",
+    "Keep fallback PathBuf::from(name) at end of fn",
+    "Verify on Linux: name resolves to \"whisper-cli\" (suffix empty)"
+  ],
+  "acceptance": [
+    "On Linux dev: dev_bin path = src-tauri/binaries/whisper-cli (unchanged)",
+    "On Windows dev: dev_bin path = src-tauri/binaries/whisper-cli.exe",
+    "No string literal \"whisper-cli\" remains without EXE_SUFFIX in models.rs"
+  ],
+  "files_touched": [
+    "src-tauri/src/models.rs"
+  ]
+}

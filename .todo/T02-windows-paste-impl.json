@@ -1,0 +1,88 @@
+{
+  "id": "T02",
+  "title": "Implement Windows paste backend (SendInput + HWND)",
+  "status": "todo",
+  "effort": "M",
+  "depends_on": [
+    "T01",
+    "T05"
+  ],
+  "context": {
+    "goal": "On Windows, capture the foreground window before recording starts, then refocus it and synthesize the transcribed text as keyboard input so it lands at the user's cursor.",
+    "caller_contract": "lib.rs do_toggle calls active_window_id() at record start; finish_dictation calls type_text(text, target.as_deref()) after hiding overlay.",
+    "hwnd_format": "Serialize HWND as decimal i64 string (e.g. \"12345678\"); parse back with str::parse::<isize>()."
+  },
+  "api_contract": [
+    {
+      "fn": "active_window_id",
+      "behavior": "GetForegroundWindow(); if HWND.0 == 0 return None else Some(decimal string)"
+    },
+    {
+      "fn": "type_text",
+      "behavior": "if target Some: parse HWND, raise_window, sleep 80ms; then enigo.text(text)"
+    }
+  ],
+  "raise_window_strategy": {
+    "primary": "AttachThreadInput(current_tid, target_tid, TRUE) then SetForegroundWindow(hwnd) then DetachThreadInput. This bypasses the foreground lock that blocks plain SetForegroundWindow.",
+    "fallback_if_minimized": "If IsIconic(hwnd) is TRUE, call ShowWindow(hwnd, SW_RESTORE) before SetForegroundWindow.",
+    "no_focus_steal_workaround": "Also call AllowSetForegroundWindow(ASFW_ANY) once at app startup (do this in lib.rs setup, gated cfg(windows)) to whitelist the dictate process."
+  },
+  "text_injection_strategy": {
+    "crate": "enigo 0.2",
+    "rationale": "enigo::Enigo::text() uses SendInput with KEYEVENTF_UNICODE per char. Handles non-ASCII (ñ, é, 中, emoji), avoids dead-key/IME issues, no need for VkKeyScan.",
+    "code_pattern": "use enigo::{Enigo, Settings, Keyboard};\nlet mut enigo = Enigo::new(&Settings::default())\n    .map_err(|e| anyhow!(\"enigo init: {e}\"))?;\nenigo.text(text).map_err(|e| anyhow!(\"enigo text: {e}\"))?;"
+  },
+  "windows_apis_needed": [
+    {
+      "api": "GetForegroundWindow",
+      "crate_path": "windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow"
+    },
+    {
+      "api": "SetForegroundWindow",
+      "crate_path": "windows::Win32::UI::WindowsAndMessaging::SetForegroundWindow"
+    },
+    {
+      "api": "IsIconic",
+      "crate_path": "windows::Win32::UI::WindowsAndMessaging::IsIconic"
+    },
+    {
+      "api": "ShowWindow",
+      "crate_path": "windows::Win32::UI::WindowsAndMessaging::ShowWindow"
+    },
+    {
+      "api": "AttachThreadInput",
+      "crate_path": "windows::Win32::UI::Input::KeyboardAndMouse::AttachThreadInput"
+    },
+    {
+      "api": "GetWindowThreadProcessId",
+      "crate_path": "windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId"
+    }
+  ],
+  "steps": [
+    "Replace stub paste/windows.rs with full impl using windows crate + enigo",
+    "Implement active_window_id per api_contract",
+    "Implement raise_window(hwnd) using AttachThreadInput strategy + iconic fallback",
+    "Implement type_text: short-circuit on empty, raise window if target Some, sleep 80ms, enigo.text(text)",
+    "In lib.rs setup() add cfg(windows) block calling AllowSetForegroundWindow(ASFW_ANY = 0xFFFFFFFF). Use ASFW_ANY constant from windows crate.",
+    "Build with `cargo build --target x86_64-pc-windows-msvc` (on Windows host or via cross)",
+    "Manual smoke test on Windows: see T10"
+  ],
+  "edge_cases": [
+    "Empty text -> return Ok(()) immediately (mirror Linux behavior)",
+    "HWND parse failure -> log eprintln but still attempt enigo.text without raise",
+    "SetForegroundWindow returns BOOL(0) -> log warning, continue with type anyway",
+    "Long text (>2000 chars) -> enigo handles batching; no chunking needed",
+    "Target window closed between capture and paste -> raise fails silently, text goes to whatever is foreground now"
+  ],
+  "acceptance": [
+    "Records audio in Window A, focuses Window B during transcription, text appears in Window A",
+    "Unicode chars (test string: \"ñ é 中 hello\") paste correctly into Notepad, Chrome address bar, VS Code",
+    "No UAC prompt or admin requirement at runtime",
+    "Compiles with no unused-import warnings on Windows target",
+    "Linux build still passes (cfg gating tight)"
+  ],
+  "files_touched": [
+    "src-tauri/src/paste/windows.rs (rewrite from stub)",
+    "src-tauri/src/lib.rs (add AllowSetForegroundWindow call in setup, cfg(windows))"
+  ]
+}

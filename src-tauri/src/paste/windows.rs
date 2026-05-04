@@ -3,17 +3,20 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
 use std::thread;
 use std::time::{Duration, Instant};
-use windows_sys::Win32::Foundation::{GetLastError, GlobalFree, HWND};
+use windows_sys::Win32::Foundation::{GetLastError, GlobalFree, HWND, LPARAM, WPARAM};
 use windows_sys::Win32::System::DataExchange::{
-    CloseClipboard, EmptyClipboard, GetClipboardData, IsClipboardFormatAvailable, OpenClipboard,
-    SetClipboardData,
+    CloseClipboard, EmptyClipboard, GetClipboardData, GetClipboardSequenceNumber,
+    IsClipboardFormatAvailable, OpenClipboard, SetClipboardData,
 };
 use windows_sys::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK_CONTROL,
 };
-use windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    GetForegroundWindow, IsIconic, IsWindow, SendMessageTimeoutW, SetForegroundWindow, ShowWindow,
+    SMTO_ABORTIFHUNG, SW_RESTORE, WM_NULL,
+};
 
 const VK_V: u16 = b'V' as u16;
 
@@ -184,26 +187,74 @@ fn send_ctrl_v() -> Result<()> {
     Ok(())
 }
 
+fn focus_window(hwnd: HWND) {
+    if hwnd.is_null() {
+        return;
+    }
+    unsafe {
+        if IsWindow(hwnd) == 0 {
+            return;
+        }
+        if IsIconic(hwnd) != 0 {
+            ShowWindow(hwnd, SW_RESTORE);
+        }
+        SetForegroundWindow(hwnd);
+    }
+}
+
+// Block until target processes its input queue. WM_NULL is a no-op message,
+// but SendMessageTimeoutW only returns once the target has handled it — which
+// implicitly drains the synthetic Ctrl+V keystrokes ahead of it.
+fn wait_for_input_drained(hwnd: HWND) {
+    if hwnd.is_null() {
+        return;
+    }
+    unsafe {
+        SendMessageTimeoutW(
+            hwnd,
+            WM_NULL,
+            0 as WPARAM,
+            0 as LPARAM,
+            SMTO_ABORTIFHUNG,
+            1000,
+            std::ptr::null_mut(),
+        );
+    }
+}
+
 pub fn type_text(text: &str, target_window: Option<&str>) -> Result<()> {
     if text.is_empty() {
         return Ok(());
     }
 
     let owner = owner_window(target_window);
+    focus_window(owner);
+    // Brief settle so the target's window manager registers the focus change
+    // before we write the clipboard and synthesize keys.
+    thread::sleep(Duration::from_millis(40));
+
     let previous_text = {
         let _clipboard = ClipboardGuard::open(owner)?;
         let previous_text = read_clipboard_text();
         replace_clipboard_text(text)?;
         previous_text
     };
+    let our_seq = unsafe { GetClipboardSequenceNumber() };
 
-    thread::sleep(Duration::from_millis(30));
     send_ctrl_v()?;
-    thread::sleep(Duration::from_millis(500));
+    wait_for_input_drained(owner);
+    // Small extra cushion: some apps (Office, browsers) read the clipboard on
+    // a worker thread after handling the keystroke.
+    thread::sleep(Duration::from_millis(80));
 
     if let Some(previous_text) = previous_text {
-        let _clipboard = ClipboardGuard::open(owner)?;
-        replace_clipboard_text(&previous_text)?;
+        // Skip restore if another writer beat us to the clipboard — overwriting
+        // would silently destroy their data.
+        let current_seq = unsafe { GetClipboardSequenceNumber() };
+        if current_seq == our_seq {
+            let _clipboard = ClipboardGuard::open(owner)?;
+            replace_clipboard_text(&previous_text)?;
+        }
     }
 
     Ok(())

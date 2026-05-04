@@ -1,0 +1,33 @@
+{
+  "id": "T06",
+  "title": "Tauri bundle config for Windows (NSIS)",
+  "status": "todo",
+  "effort": "S",
+  "depends_on": [],
+  "context": {
+    "file": "src-tauri/tauri.conf.json",
+    "current_targets": "\"all\" — produces deb/rpm/appimage on Linux; on Windows would attempt msi+nsis but no per-OS config block exists.",
+    "goal": "Explicit per-OS targets + windows installer config + icon set + sidecar binary declaration."
+  },
+  "icons_needed": [
+    "src-tauri/icons/icon.ico (Windows requires .ico for installer + exe; convert from existing icon.png if missing)"
+  ],
+  "bundle_block": "\"bundle\": {\n  \"active\": true,\n  \"targets\": \"all\",\n  \"icon\": [\"icons/icon.png\", \"icons/icon.ico\"],\n  \"resources\": [],\n  \"externalBin\": [\"binaries/whisper-cli\"],\n  \"windows\": {\n    \"nsis\": {\n      \"installerIcon\": \"icons/icon.ico\",\n      \"installMode\": \"perUser\",\n      \"languages\": [\"English\"]\n    }\n  }\n}",
+  "externalBin_note": "Tauri appends -<triple><exe-suffix> automatically when locating the sidecar at bundle time. So binaries/whisper-cli + the per-triple copies (T04 step 10, T11 sidecar copy) cover all OSes.",
+  "steps": [
+    "Convert icons/icon.png to icons/icon.ico (use ImageMagick: `convert icon.png -define icon:auto-resize=256,128,64,48,32,16 icon.ico` OR online; commit the .ico)",
+    "Replace bundle block in tauri.conf.json with bundle_block above",
+    "Verify externalBin path resolves: must have binaries/whisper-cli-<triple>{.exe} present at build time for each target OS",
+    "Run `npm run tauri build` on Linux to confirm config still parses and produces deb/appimage",
+    "(Defer Windows bundle test to T11 CI matrix)"
+  ],
+  "acceptance": [
+    "tauri.conf.json validates against schema (no editor warnings)",
+    "Linux release build produces dictate*.deb / *.AppImage as before",
+    "icons/icon.ico exists and is multi-size (16,32,48,128,256)"
+  ],
+  "files_touched": [
+    "src-tauri/tauri.conf.json",
+    "src-tauri/icons/icon.ico (new binary)"
+  ]
+}

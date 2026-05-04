@@ -1,0 +1,77 @@
+{
+  "id": "T12",
+  "title": "Release operations runbook (tag push, verify, publish)",
+  "status": "todo",
+  "effort": "S",
+  "depends_on": [
+    "T11"
+  ],
+  "audience": "maintainer (Pedro), executed manually per release, not by impl agent",
+  "context": {
+    "goal": "Document the human steps to cut a versioned release once T11 workflow exists. Lives at docs/RELEASING.md.",
+    "trigger_model": "Tag-driven. Push a tag vX.Y.Z, GH Actions builds and creates a draft Release, maintainer reviews and publishes."
+  },
+  "prerequisites": [
+    "All T01-T11 merged to main",
+    "T10 manual test matrix passed on the commit being tagged",
+    "Working tree clean (git status empty)"
+  ],
+  "release_steps": [
+    "Bump version in package.json (\"version\": \"X.Y.Z\")",
+    "Bump version in src-tauri/Cargo.toml ([package] version = \"X.Y.Z\")",
+    "Bump version in src-tauri/tauri.conf.json (\"version\": \"X.Y.Z\")",
+    "Run `cargo check` in src-tauri/ to refresh Cargo.lock with new version",
+    "Update CHANGELOG.md (create if absent) with notable changes since last tag",
+    "Commit: git add -A ; git commit -m 'release: vX.Y.Z'",
+    "Push commit to main: git push origin main",
+    "Tag: git tag -a vX.Y.Z -m 'Dictate vX.Y.Z' (annotated tag — required for GHA trigger and visibility)",
+    "Push tag: git push origin vX.Y.Z",
+    "Watch Actions tab: https://github.com/USERNAME/dictate/actions — wait ~15-25 min for both matrix legs",
+    "Once green, open https://github.com/USERNAME/dictate/releases — find draft 'Dictate vX.Y.Z'",
+    "Verify artifacts present (see verify_artifacts), edit release notes, untick 'Draft', click Publish"
+  ],
+  "verify_artifacts": [
+    ".deb file (Ubuntu/Debian)",
+    ".AppImage file (universal Linux)",
+    ".rpm file (Fedora)",
+    "*-setup.exe NSIS installer (Windows preferred)",
+    "*.msi file (Windows alt)"
+  ],
+  "post_release_smoke": [
+    "Download Windows .exe to a clean Win11 VM, install, dictate one sentence in Notepad — verify works",
+    "Download Linux .AppImage on a fresh Pop!_OS VM, chmod +x, run, dictate — verify works",
+    "Update README install one-liners if release URL pattern changed",
+    "Announce: post link to release page wherever relevant"
+  ],
+  "rollback_procedure": [
+    "If a critical bug is discovered post-publish: open the Release on GitHub, click 'Delete release' (this also removes the tag's association)",
+    "Optionally delete the git tag: git tag -d vX.Y.Z ; git push --delete origin vX.Y.Z",
+    "Fix bug, bump to vX.Y.Z+1 (do NOT reuse the broken version number — installers cache aggressively)",
+    "Re-run release_steps with new version"
+  ],
+  "smartscreen_notes": [
+    "Unsigned NSIS .exe will trigger 'Windows protected your PC' SmartScreen. Users must click 'More info' -> 'Run anyway'.",
+    "Reputation builds over downloads/installs over time, reducing the warning.",
+    "To eliminate: buy code signing cert (DigiCert/Sectigo, ~$200/yr), add WINDOWS_CERTIFICATE secret to repo, add signtool step to release.yml after Tauri build. Defer until release count justifies cost."
+  ],
+  "future_improvements": [
+    "Auto-generate CHANGELOG from conventional commits (git-cliff or release-please)",
+    "Add tauri-plugin-updater + signing keys for in-app auto-updates",
+    "Add macOS to matrix (separate ticket — not in scope of Windows port)",
+    "Add code signing (Windows + macOS notarization)"
+  ],
+  "steps": [
+    "Create docs/RELEASING.md with content based on this ticket's structure",
+    "Link from README.md ## Roadmap or new ## Releasing section: 'Maintainer: see docs/RELEASING.md'",
+    "Run through the runbook end-to-end for v0.1.0 as the first real release"
+  ],
+  "acceptance": [
+    "docs/RELEASING.md exists and is followable by someone who has never released this project",
+    "v0.1.0 published on GitHub Releases with all 5 artifact types",
+    "Both install.ps1 and install.sh in README correctly point to USERNAME/dictate"
+  ],
+  "files_touched": [
+    "docs/RELEASING.md (new)",
+    "README.md (add Releasing section link)"
+  ]
+}

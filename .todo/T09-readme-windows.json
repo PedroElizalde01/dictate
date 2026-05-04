@@ -1,0 +1,58 @@
+{
+  "id": "T09",
+  "title": "README updates for Windows",
+  "status": "todo",
+  "effort": "S",
+  "depends_on": [
+    "T07",
+    "T11"
+  ],
+  "context": {
+    "file": "README.md",
+    "changes_required": [
+      "Drop the 'Linux X11 only for now' line (current line 31)",
+      "Replace tagline with: 'Local Whisper dictation for Linux and Windows.'",
+      "Add Windows install section with PowerShell one-liner",
+      "Add Windows manual build steps",
+      "Update 'Where files live' table with Windows paths"
+    ]
+  },
+  "windows_paths_table": [
+    {
+      "path": "%APPDATA%\\dictate\\settings.json",
+      "purpose": "User settings"
+    },
+    {
+      "path": "%LOCALAPPDATA%\\dictate\\models\\",
+      "purpose": "Downloaded Whisper models"
+    },
+    {
+      "path": "src-tauri\\binaries\\whisper-cli.exe",
+      "purpose": "Compiled whisper.cpp binary"
+    }
+  ],
+  "new_install_section_outline": [
+    "Quick install (winget + PowerShell): one-line iwr|iex command",
+    "Manual install: install winget prereqs, clone, run scripts/build-whisper.ps1, npm install, npm run tauri build",
+    "Pre-built release: link to GitHub Releases page (will exist after T11/T12), download .msi or .exe and run",
+    "Note on SmartScreen: unsigned installer triggers warning — instruct user to click 'More info' -> 'Run anyway' until code signing is added"
+  ],
+  "troubleshooting_additions": [
+    "Windows: paste does nothing -> some apps (elevated apps, secure desktop) reject SendInput from non-elevated sender. Run target app non-elevated.",
+    "Windows: SmartScreen warning -> see install section.",
+    "Windows: Vulkan build fails -> ensure LunarG Vulkan SDK installed and VK_SDK_PATH set."
+  ],
+  "steps": [
+    "Edit README.md replacing the Linux-only tagline and roadmap line",
+    "Insert ## Windows install section after current ## Install",
+    "Append Windows row to 'Where files live' table",
+    "Append 3 troubleshooting bullets"
+  ],
+  "acceptance": [
+    "README renders cleanly on GitHub (preview)",
+    "Both Linux and Windows install paths discoverable in <30s of scanning"
+  ],
+  "files_touched": [
+    "README.md"
+  ]
+}

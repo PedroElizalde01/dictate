@@ -56,16 +56,17 @@ pub fn download_model(size: &str) -> Result<PathBuf> {
 }
 
 pub fn whisper_binary_path(app: &tauri::AppHandle) -> PathBuf {
+    let binary_name = format!("whisper-cli{}", std::env::consts::EXE_SUFFIX);
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let dev_bin = manifest_dir.join("binaries").join("whisper-cli");
+    let dev_bin = manifest_dir.join("binaries").join(&binary_name);
     if dev_bin.exists() {
         return dev_bin;
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(parent) = exe.parent() {
             let candidates = [
-                parent.join("whisper-cli"),
-                parent.join("binaries/whisper-cli"),
+                parent.join(&binary_name),
+                parent.join("binaries").join(&binary_name),
             ];
             for c in candidates {
                 if c.exists() {
@@ -75,11 +76,11 @@ pub fn whisper_binary_path(app: &tauri::AppHandle) -> PathBuf {
         }
     }
     if let Ok(resource) = app.path().resource_dir() {
-        let p = resource.join("binaries/whisper-cli");
+        let p = resource.join("binaries").join(&binary_name);
         if p.exists() {
             return p;
         }
     }
-    PathBuf::from("whisper-cli")
+    PathBuf::from(binary_name)
 }
 

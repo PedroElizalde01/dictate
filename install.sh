@@ -22,7 +22,15 @@ ok()  { echo "${c_green}✓${c_off} $*"; }
 warn(){ echo "${c_yellow}!${c_off} $*"; }
 die() { echo "${c_red}✗${c_off} $*" >&2; exit 1; }
 
-[ "$(uname -s)" = "Linux" ] || die "Linux only for now."
+case "$(uname -s)" in
+  Linux) ;;
+  MINGW*|MSYS*|CYGWIN*)
+    die "Use the Windows installer instead: powershell -ExecutionPolicy Bypass -File .\\install.ps1"
+    ;;
+  *)
+    die "This installer is for Linux. Windows 10/11 users should run install.ps1."
+    ;;
+esac
 [ "${XDG_SESSION_TYPE:-}" = "x11" ] || warn "Session is '${XDG_SESSION_TYPE:-unknown}'. Auto-paste needs X11; Wayland support is pending."
 
 # --- Detect package manager ---

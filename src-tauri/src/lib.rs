@@ -177,7 +177,7 @@ fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()
     let bin = models::whisper_binary_path(app);
     if !bin.exists() {
         return Err(anyhow::anyhow!(
-            "whisper-cli binary not found at {}. Run ./scripts/build-whisper.sh",
+            "whisper-cli binary not found at {}. Run scripts/build-whisper.ps1 on Windows or ./scripts/build-whisper.sh on Linux.",
             bin.display()
         ));
     }

@@ -1,0 +1,24 @@
+{
+  "id": "T08",
+  "title": "Make install.sh exit cleanly on non-Linux + redirect",
+  "status": "todo",
+  "effort": "XS",
+  "depends_on": [],
+  "context": {
+    "file": "install.sh",
+    "current_line_25": "[ \"$(uname -s)\" = \"Linux\" ] || die \"Linux only for now.\"",
+    "goal": "On Windows-via-WSL or macOS, give actionable redirect instead of opaque die."
+  },
+  "steps": [
+    "Replace the hard die line with a case statement on uname -s",
+    "Linux -> proceed; Darwin -> die with message about macOS not yet supported (point to roadmap); MINGW*|MSYS*|CYGWIN* -> die with message: 'Use install.ps1 from PowerShell on Windows.'"
+  ],
+  "snippet": "case \"$(uname -s)\" in\n  Linux) ;;\n  Darwin) die \"macOS support not yet available. Track: README roadmap.\" ;;\n  MINGW*|MSYS*|CYGWIN*) die \"Detected Windows shell. Use install.ps1 in PowerShell:\\n  powershell -ExecutionPolicy Bypass -Command \\\"iwr -useb https://raw.githubusercontent.com/USERNAME/dictate/main/install.ps1 | iex\\\"\" ;;\n  *) die \"Unsupported OS: $(uname -s)\" ;;\nesac",
+  "acceptance": [
+    "install.sh on Linux behaves identically to current",
+    "install.sh under Git Bash on Windows prints PowerShell instructions and exits 1"
+  ],
+  "files_touched": [
+    "install.sh"
+  ]
+}

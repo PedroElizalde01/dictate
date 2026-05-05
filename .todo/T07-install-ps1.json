@@ -1,0 +1,90 @@
+{
+  "id": "T07",
+  "title": "install.ps1 (Windows one-line installer from source)",
+  "status": "todo",
+  "effort": "M",
+  "depends_on": [
+    "T04"
+  ],
+  "context": {
+    "goal": "Mirror install.sh for Windows. Two execution modes: (a) source build like Linux script, (b) optional download-prebuilt-from-release if available. Default = source build until T11 release pipeline lands; then T12 will switch default to release download.",
+    "invocation": "iwr -useb https://raw.githubusercontent.com/USERNAME/dictate/main/install.ps1 | iex"
+  },
+  "env_vars": [
+    {
+      "name": "REPO_URL",
+      "default": "https://github.com/USERNAME/dictate.git",
+      "purpose": "Override git remote"
+    },
+    {
+      "name": "INSTALL_DIR",
+      "default": "$env:LOCALAPPDATA\\dictate-src",
+      "purpose": "Override source checkout dir"
+    },
+    {
+      "name": "BRANCH",
+      "default": "main",
+      "purpose": "Branch to clone"
+    },
+    {
+      "name": "VULKAN",
+      "default": "0",
+      "purpose": "Pass through to build-whisper.ps1"
+    }
+  ],
+  "prereq_install_via_winget": [
+    {
+      "id": "Git.Git",
+      "purpose": "git CLI"
+    },
+    {
+      "id": "Rustlang.Rustup",
+      "purpose": "rustup toolchain manager"
+    },
+    {
+      "id": "OpenJS.NodeJS.LTS",
+      "purpose": "node + npm"
+    },
+    {
+      "id": "Kitware.CMake",
+      "purpose": "cmake for whisper.cpp build"
+    },
+    {
+      "id": "Microsoft.VisualStudio.2022.BuildTools",
+      "purpose": "MSVC C++ compiler (must include workload Microsoft.VisualStudio.Workload.VCTools)"
+    }
+  ],
+  "steps": [
+    "Set strict mode: Set-StrictMode -Version Latest; $ErrorActionPreference = 'Stop'",
+    "Detect winget: if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Write-Error 'winget required (Windows 10 1809+ with App Installer)'; exit 1 }",
+    "For each prereq id: if not already installed, run `winget install --id <id> -e --accept-source-agreements --accept-package-agreements`. For VS Build Tools also pass `--override \"--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet --wait\"`",
+    "Refresh PATH in current session: $env:Path = [Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')",
+    "Run `rustup default stable` if no default toolchain set",
+    "Clone or update repo at $INSTALL_DIR (mirror install.sh logic: if .git exists, fetch+reset; else git clone --depth 1 --branch $BRANCH)",
+    "cd $INSTALL_DIR; & .\\scripts\\build-whisper.ps1 (env VULKAN inherited)",
+    "npm install --no-audit --no-fund",
+    "npm run tauri build",
+    "Locate produced installer: Get-ChildItem -Path src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1 ; Start-Process the installer with -Wait OR print path and instruct user to double-click"
+  ],
+  "post_install_message": [
+    "Print: 'Dictate installed.'",
+    "Print: 'Launch from Start Menu: Dictate'",
+    "Print: 'Settings file: %APPDATA%\\dictate\\settings.json'",
+    "Print: 'Models folder: %LOCALAPPDATA%\\dictate\\models\\'",
+    "Print: 'Default hotkey: Ctrl+Shift+D'",
+    "Print: 'Source checkout: $INSTALL_DIR'"
+  ],
+  "execution_policy_note": {
+    "problem": "User may have Restricted execution policy.",
+    "guidance_in_README": "Recommend running as: powershell -ExecutionPolicy Bypass -Command \"iwr -useb https://.../install.ps1 | iex\""
+  },
+  "acceptance": [
+    "Fresh Windows 11 VM with only winget: full script completes without manual intervention (modulo VS Build Tools dialog)",
+    "Resulting NSIS installer launches and installs Dictate to per-user location",
+    "After install, dictate.exe appears in Start Menu and runs",
+    "Script idempotent: re-running detects existing tools, skips re-install"
+  ],
+  "files_touched": [
+    "install.ps1 (new)"
+  ]
+}

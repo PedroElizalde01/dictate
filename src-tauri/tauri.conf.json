@@ -44,7 +44,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png"],
-    "resources": []
+    "icon": ["icons/icon.png", "icons/icon.ico"],
+    "resources": ["binaries/*"]
   }
 }

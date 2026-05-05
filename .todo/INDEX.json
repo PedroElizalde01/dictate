@@ -1,0 +1,129 @@
+{
+  "project": "Dictate Windows port",
+  "goal": "Make Linux X11-only Tauri app run on Windows 10/11 with installer + GitHub release pipeline",
+  "order_note": "Execute T01 -> T11 in order. T12 (release ops) is run by maintainer after T11 lands.",
+  "tickets": [
+    {
+      "id": "T01",
+      "title": "Refactor paste module into platform backends",
+      "depends_on": [],
+      "blocking": [
+        "T02"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "T02",
+      "title": "Implement Windows paste backend (SendInput + HWND)",
+      "depends_on": [
+        "T01"
+      ],
+      "blocking": [
+        "T10"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "T03",
+      "title": "Fix whisper_binary_path for .exe suffix",
+      "depends_on": [],
+      "blocking": [
+        "T10"
+      ],
+      "effort": "XS"
+    },
+    {
+      "id": "T04",
+      "title": "PowerShell whisper.cpp build script",
+      "depends_on": [],
+      "blocking": [
+        "T07",
+        "T11"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "T05",
+      "title": "Add Windows-only Cargo deps (windows + enigo)",
+      "depends_on": [
+        "T01"
+      ],
+      "blocking": [
+        "T02"
+      ],
+      "effort": "XS"
+    },
+    {
+      "id": "T06",
+      "title": "Tauri bundle config for Windows (NSIS)",
+      "depends_on": [],
+      "blocking": [
+        "T11"
+      ],
+      "effort": "S"
+    },
+    {
+      "id": "T07",
+      "title": "install.ps1 (Windows one-line installer from source)",
+      "depends_on": [
+        "T04"
+      ],
+      "blocking": [
+        "T09"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "T08",
+      "title": "Make install.sh exit cleanly on non-Linux + redirect",
+      "depends_on": [],
+      "blocking": [
+        "T09"
+      ],
+      "effort": "XS"
+    },
+    {
+      "id": "T09",
+      "title": "README updates for Windows",
+      "depends_on": [
+        "T07",
+        "T11"
+      ],
+      "blocking": [],
+      "effort": "S"
+    },
+    {
+      "id": "T10",
+      "title": "Cross-platform test matrix execution",
+      "depends_on": [
+        "T02",
+        "T03"
+      ],
+      "blocking": [
+        "T11"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "T11",
+      "title": "GitHub Actions release workflow (multi-OS bundle + tag)",
+      "depends_on": [
+        "T04",
+        "T06"
+      ],
+      "blocking": [
+        "T12"
+      ],
+      "effort": "M"
+    },
+    {
+      "id": "T12",
+      "title": "Release operations runbook (tag push, verify, publish)",
+      "depends_on": [
+        "T11"
+      ],
+      "blocking": [],
+      "effort": "S"
+    }
+  ]
+}

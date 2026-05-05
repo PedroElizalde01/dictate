@@ -1,0 +1,55 @@
+{
+  "id": "T04",
+  "title": "PowerShell whisper.cpp build script",
+  "status": "todo",
+  "effort": "M",
+  "depends_on": [],
+  "context": {
+    "goal": "Mirror scripts/build-whisper.sh on Windows. Produce whisper-cli.exe in src-tauri/binaries plus a sidecar copy named whisper-cli-<rust-target-triple>.exe so Tauri sidecar lookup works.",
+    "prereqs_on_host": [
+      "Visual Studio 2022 Build Tools with C++ workload (provides cl.exe + Windows SDK)",
+      "CMake >= 3.20 on PATH",
+      "Git on PATH",
+      "rustup-installed Rust toolchain (for rustc -vV target detection)",
+      "Optional: Vulkan SDK (LunarG) for VULKAN=1 path"
+    ]
+  },
+  "script_path": "scripts/build-whisper.ps1",
+  "env_vars": [
+    {
+      "name": "VULKAN",
+      "default": "0",
+      "purpose": "If 1, add -DGGML_VULKAN=ON to cmake flags"
+    },
+    {
+      "name": "WHISPER_REF",
+      "default": "master",
+      "purpose": "Git ref to checkout in whisper.cpp clone"
+    }
+  ],
+  "steps": [
+    "Set $ErrorActionPreference = 'Stop' at top",
+    "Resolve $Root = (Resolve-Path \"$PSScriptRoot/..\").Path",
+    "Set $BuildDir = Join-Path $Root '.whisper-build'; $BinDir = Join-Path $Root 'src-tauri/binaries'",
+    "New-Item -ItemType Directory -Force on $BinDir",
+    "If not Test-Path \"$BuildDir/whisper.cpp/.git\": git clone --depth 1 https://github.com/ggerganov/whisper.cpp \"$BuildDir/whisper.cpp\"",
+    "cd \"$BuildDir/whisper.cpp\"; git pull --ff-only (ignore failure)",
+    "Build cmake flags array: -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON. Append -DGGML_VULKAN=ON if $env:VULKAN -eq '1'",
+    "Run: cmake -B build @flags ; cmake --build build -j --config Release",
+    "Locate produced exe: probe build/bin/Release/whisper-cli.exe then build/bin/whisper-cli.exe then build/Release/whisper-cli.exe",
+    "Copy-Item to $BinDir/whisper-cli.exe AND to $BinDir/whisper-cli-<triple>.exe where <triple> = (rustc -vV | Select-String 'host:').Line.Split(' ')[1]"
+  ],
+  "dll_handling": {
+    "problem": "Vulkan or future shared-lib builds may emit ggml-*.dll alongside the exe. CPU-only static build should not.",
+    "action": "After copy, glob $BuildDir/whisper.cpp/build/bin/Release/*.dll and copy any matches into $BinDir. Document this in script header comment."
+  },
+  "acceptance": [
+    "Running scripts/build-whisper.ps1 from clean checkout produces src-tauri/binaries/whisper-cli.exe (size > 1MB)",
+    "Sidecar copy whisper-cli-x86_64-pc-windows-msvc.exe also present",
+    "VULKAN=1 path completes when Vulkan SDK installed (skip in CI without SDK)",
+    "Script exits non-zero on any cmake/git/copy failure"
+  ],
+  "files_touched": [
+    "scripts/build-whisper.ps1 (new)"
+  ]
+}

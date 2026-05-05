@@ -1,0 +1,58 @@
+{
+  "id": "T10",
+  "title": "Cross-platform test matrix execution",
+  "status": "todo",
+  "effort": "M",
+  "depends_on": [
+    "T02",
+    "T03"
+  ],
+  "context": {
+    "goal": "Manual smoke test before tagging release. Catches platform regressions cfg gating cannot.",
+    "environments": [
+      {
+        "os": "Linux (Pop!_OS or Ubuntu 24.04)",
+        "session": "X11"
+      },
+      {
+        "os": "Windows 11",
+        "session": "Desktop"
+      }
+    ]
+  },
+  "linux_regression": [
+    "Fresh `npm install && ./scripts/build-whisper.sh && npm run tauri dev`",
+    "Press Ctrl+Shift+D in Firefox URL bar, speak 'hello world', press again, text appears",
+    "Press Ctrl+Shift+D in VS Code editor, speak Spanish, text appears",
+    "Cancel mid-record with Ctrl+Shift+X — no paste happens",
+    "Settings hotkey Ctrl+Shift+, opens main window",
+    "Tray icon menu Quit exits cleanly"
+  ],
+  "windows_smoke": [
+    "Run scripts/build-whisper.ps1 — verify whisper-cli.exe in src-tauri/binaries",
+    "npm install ; npm run tauri dev — app starts, settings window appears on first run",
+    "Download tiny model from settings, set as active",
+    "Pick default mic, save settings",
+    "Focus Notepad, press Ctrl+Shift+D, say 'hello world', press again — text 'hello world' appears in Notepad",
+    "Repeat in Chrome address bar",
+    "Repeat in VS Code editor",
+    "Test unicode: say Spanish phrase with ñ — characters render correctly",
+    "Test cancel: start record, press Ctrl+Shift+X — no paste, overlay closes",
+    "npm run tauri build — NSIS installer produced under src-tauri/target/release/bundle/nsis/"
+  ],
+  "windows_install_test": [
+    "Run produced .exe installer on a clean Win11 VM (no Rust/Node)",
+    "App launches from Start Menu",
+    "Settings persist at %APPDATA%\\dictate\\settings.json after restart",
+    "Autostart toggle creates Run key entry: HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\dictate"
+  ],
+  "failure_logging": {
+    "required": "On any failure, capture: console output (stderr from `npm run tauri dev`), settings.json, screenshot, exact reproduction steps. File as bug ticket before proceeding to T11."
+  },
+  "acceptance": [
+    "All linux_regression steps pass",
+    "All windows_smoke steps pass",
+    "All windows_install_test steps pass"
+  ],
+  "files_touched": []
+}

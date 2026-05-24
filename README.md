@@ -1,7 +1,21 @@
-# Dictate
+<div align="center">
+<pre>
+ ██████████   █████   █████████  ███████████   █████████   ███████████ ██████████
+░░███░░░░███ ░░███   ███░░░░░███░█░░░███░░░█  ███░░░░░███ ░█░░░███░░░█░░███░░░░░█
+ ░███   ░░███ ░███  ███     ░░░ ░   ░███  ░  ░███    ░███ ░   ░███  ░  ░███  █ ░ 
+ ░███    ░███ ░███ ░███             ░███     ░███████████     ░███     ░██████   
+ ░███    ░███ ░███ ░███             ░███     ░███░░░░░███     ░███     ░███░░█   
+ ░███    ███  ░███ ░░███     ███    ░███     ░███    ░███     ░███     ░███ ░   █
+ ██████████   █████ ░░█████████     █████    █████   █████    █████    ██████████
+░░░░░░░░░░   ░░░░░   ░░░░░░░░░     ░░░░░    ░░░░░   ░░░░░    ░░░░░    ░░░░░░░░░░ 
+</pre>
 
-Local Whisper dictation for Linux X11 and Windows 10/11. Press a global hotkey, speak, and the transcription is typed at your cursor in the app you were using.
+Local Whisper dictation for Linux X11 and Windows 10/11
+</div>
 
+---
+
+Press a global hotkey, speak, and the transcription is typed at your cursor in the app you were using.
 Runs entirely on your machine. No cloud, no API keys, no telemetry.
 
 ## Features

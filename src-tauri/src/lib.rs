@@ -1,6 +1,7 @@
 mod audio;
 mod cleanup;
 mod config;
+mod history;
 mod models;
 mod paste;
 mod whisper;
@@ -105,6 +106,21 @@ fn apply_autostart(enabled: bool, app: AppHandle) -> Result<(), String> {
     } else {
         mgr.disable().map_err(|e| e.to_string())
     }
+}
+
+#[tauri::command]
+fn get_history() -> Vec<history::HistoryEntry> {
+    history::load_history()
+}
+
+#[tauri::command]
+fn delete_history_entry(id: u64) -> Result<(), String> {
+    history::delete_entry(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn clear_history() -> Result<(), String> {
+    history::clear().map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -216,6 +232,10 @@ fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()
         let _ = app.emit("dictate-error", "empty transcription");
         return Ok(());
     }
+    if let Err(e) = history::add_entry(&final_text) {
+        eprintln!("history save failed: {e}");
+    }
+    let _ = app.emit("history-updated", ());
     let target = state.target_window.lock().clone();
     let _ = app.emit("dictate-phase", PhasePayload { phase: "exit" });
     std::thread::sleep(std::time::Duration::from_millis(220));
@@ -321,6 +341,9 @@ pub fn run() {
             apply_cancel_hotkey,
             apply_settings_hotkey,
             apply_autostart,
+            get_history,
+            delete_history_entry,
+            clear_history,
             hide_main,
             show_main,
             toggle_dictate,

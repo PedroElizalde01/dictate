@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { MicDevice, ModelFile, Settings } from "./types";
+import type { HistoryEntry, MicDevice, ModelFile, Settings } from "./types";
 
 export const api = {
   listMics: () => invoke<MicDevice[]>("list_mics"),
@@ -11,6 +11,9 @@ export const api = {
   applyCancelHotkey: (combo: string) => invoke<void>("apply_cancel_hotkey", { combo }),
   applySettingsHotkey: (combo: string) => invoke<void>("apply_settings_hotkey", { combo }),
   applyAutostart: (enabled: boolean) => invoke<void>("apply_autostart", { enabled }),
+  getHistory: () => invoke<HistoryEntry[]>("get_history"),
+  deleteHistoryEntry: (id: number) => invoke<void>("delete_history_entry", { id }),
+  clearHistory: () => invoke<void>("clear_history"),
   hideMain: () => invoke<void>("hide_main"),
   toggleDictate: () => invoke<void>("toggle_dictate"),
 };

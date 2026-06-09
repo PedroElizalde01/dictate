@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
-import { DEFAULT_SETTINGS, Language, PostProcess, Settings, MicDevice, ModelFile } from "./types";
+import { DEFAULT_SETTINGS, Language, PostProcess, Settings, MicDevice, ModelFile, HistoryEntry } from "./types";
 
 const MODEL_SIZES: { id: string; size: string }[] = [
   { id: "tiny", size: "75 MB" },
@@ -49,6 +49,29 @@ function Icon({ name }: { name: string }) {
     ),
     wave: (
       <path d="M3 12h2l2-7 3 14 3-10 3 6 2-3h3" stroke={stroke} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    ),
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth={sw} />
+        <path d="M12 7v5l3 2" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+      </>
+    ),
+    gear: (
+      <>
+        <circle cx="12" cy="12" r="3" stroke={stroke} strokeWidth={sw} />
+        <path d="M12 2.5v3M12 18.5v3M21.5 12h-3M5.5 12h-3M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1M18.7 18.7l-2.1-2.1M7.4 7.4L5.3 5.3" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
+      </>
+    ),
+    copy: (
+      <>
+        <rect x="9" y="9" width="11" height="11" rx="2" stroke={stroke} strokeWidth={sw} />
+        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke={stroke} strokeWidth={sw} />
+      </>
+    ),
+    trash: (
+      <>
+        <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13a1 1 0 001 1h8a1 1 0 001-1l1-13M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3" stroke={stroke} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" />
+      </>
     ),
   };
   return (
@@ -113,10 +136,22 @@ function HotkeyRow(props: {
   );
 }
 
+function formatStamp(ms: number): { date: string; time: string } {
+  const d = new Date(ms);
+  return {
+    date: d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+    time: d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+type View = "history" | "settings";
+
 export default function App() {
+  const [view, setView] = useState<View>("settings");
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [mics, setMics] = useState<MicDevice[]>([]);
   const [models, setModels] = useState<ModelFile[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   type HotkeyKind = "dictate" | "cancel" | "settings";
   const [hotkeyEdit, setHotkeyEdit] = useState<HotkeyKind | null>(null);
   const [hotkeyBuffer, setHotkeyBuffer] = useState("");
@@ -128,16 +163,25 @@ export default function App() {
     setModels(await api.listModels());
   };
 
+  const refreshHistory = async () => {
+    setHistory(await api.getHistory());
+  };
+
   useEffect(() => {
     (async () => {
       setSettings(await api.getSettings());
       await refresh();
+      await refreshHistory();
     })();
-    const un = listen<string>("dictate-error", (e) => {
+    const unErr = listen<string>("dictate-error", (e) => {
       flash(e.payload, "error");
     });
+    const unHist = listen("history-updated", () => {
+      refreshHistory();
+    });
     return () => {
-      un.then((f) => f());
+      unErr.then((f) => f());
+      unHist.then((f) => f());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -204,21 +248,82 @@ export default function App() {
 
   const installedSet = new Set(models.map((m) => m.name.replace(/^ggml-|\.bin$/g, "")));
 
-  return (
-    <div className="shell single">
-      <main className="main">
-        <div className="topbar">
-          <div className="brand inline">
-            <div className="brand-mark"><BrandMark /></div>
-            <div className="brand-name">Dictate</div>
-            <span className="dot" title="Ready · listening for hotkey" />
-          </div>
-          <div className="topbar-right">
-            <span className="kbd">{parseHotkey(settings.hotkey).join(" + ") || "—"}</span>
-            <button className="ghost" onClick={() => api.hideMain()}>Hide</button>
-          </div>
-        </div>
+  const copyEntry = async (text: string) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // webkit2gtk fallback when Clipboard API is unavailable
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        ta.remove();
+      }
+      flash("Copied to clipboard");
+    } catch (e) {
+      flash(`Copy error: ${e}`, "error");
+    }
+  };
 
+  const deleteEntry = async (id: number) => {
+    await api.deleteHistoryEntry(id);
+    await refreshHistory();
+  };
+
+  const clearAll = async () => {
+    await api.clearHistory();
+    await refreshHistory();
+    flash("History cleared");
+  };
+
+  const historyView = (
+    <div className="content">
+      <header className="page-head">
+        <div className="row between">
+          <h1>History</h1>
+          {history.length > 0 && (
+            <button className="ghost" onClick={clearAll}>Clear all</button>
+          )}
+        </div>
+        <p>Everything you've dictated, newest first. Stored locally only.</p>
+      </header>
+
+      {history.length === 0 ? (
+        <div className="history-empty">
+          <Icon name="wave" />
+          <p>No dictations yet. Press <span className="kbd">{parseHotkey(settings.hotkey).join(" + ")}</span> to start.</p>
+        </div>
+      ) : (
+        <div className="history-list">
+          {history.map((h) => {
+            const { date, time } = formatStamp(h.timestampMs);
+            return (
+              <div key={h.id} className="history-item">
+                <div className="history-head">
+                  <span className="history-stamp">{date} · {time}</span>
+                  <div className="history-actions">
+                    <button className="ghost icon-btn" title="Copy" onClick={() => copyEntry(h.text)}>
+                      <Icon name="copy" />
+                    </button>
+                    <button className="ghost icon-btn" title="Delete" onClick={() => deleteEntry(h.id)}>
+                      <Icon name="trash" />
+                    </button>
+                  </div>
+                </div>
+                <div className="history-text">{h.text}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+
+  const settingsView = (
         <div className="content">
           <header className="page-head">
             <h1>Dictation settings</h1>
@@ -406,6 +511,52 @@ export default function App() {
             </div>
           </section>
         </div>
+  );
+
+  return (
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <div className="brand-mark"><BrandMark /></div>
+          <div>
+            <div className="brand-name">Dictate</div>
+            <div className="brand-sub">Local Whisper</div>
+          </div>
+        </div>
+        <nav className="nav">
+          <div
+            className={`nav-item ${view === "history" ? "active" : ""}`}
+            onClick={() => setView("history")}
+          >
+            <Icon name="clock" />
+            History
+          </div>
+          <div
+            className={`nav-item ${view === "settings" ? "active" : ""}`}
+            onClick={() => setView("settings")}
+          >
+            <Icon name="gear" />
+            Settings
+          </div>
+        </nav>
+        <div className="sidebar-foot">
+          <span className="dot" title="Ready · listening for hotkey" />
+          Ready
+        </div>
+      </aside>
+
+      <main className="main">
+        <div className="topbar">
+          <div className="crumbs">
+            <strong>{view === "history" ? "History" : "Settings"}</strong>
+          </div>
+          <div className="topbar-right">
+            <span className="kbd">{parseHotkey(settings.hotkey).join(" + ") || "—"}</span>
+            <button className="ghost" onClick={() => api.hideMain()}>Hide</button>
+          </div>
+        </div>
+
+        {view === "history" ? historyView : settingsView}
       </main>
 
       {toast && (

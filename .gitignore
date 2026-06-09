@@ -16,8 +16,14 @@ src-tauri/binaries/*
 # Local recordings
 *.wav
 
+# Local env
+.env
+
 # OS / editor
 .DS_Store
 .vscode/
 .idea/
 *.swp
+
+# personal shit
+/personal

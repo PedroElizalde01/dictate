@@ -17,6 +17,12 @@ export interface MicDevice {
   is_default: boolean;
 }
 
+export interface HistoryEntry {
+  id: number;
+  text: string;
+  timestampMs: number;
+}
+
 export interface ModelFile {
   name: string;
   path: string;

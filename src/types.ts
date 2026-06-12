@@ -1,6 +1,11 @@
 export type Language = "auto" | "en" | "es";
 export type PostProcess = "raw" | "cleanup";
 
+export interface DictEntry {
+  from: string;
+  to: string;
+}
+
 export interface Settings {
   micDevice: string | null;
   modelPath: string | null;
@@ -10,6 +15,9 @@ export interface Settings {
   language: Language;
   postProcess: PostProcess;
   autostart: boolean;
+  dictionary: DictEntry[];
+  reviewMode: boolean;
+  confirmKey: string;
 }
 
 export interface MicDevice {
@@ -38,4 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   language: "auto",
   postProcess: "cleanup",
   autostart: false,
+  dictionary: [],
+  reviewMode: false,
+  confirmKey: "Tab",
 };

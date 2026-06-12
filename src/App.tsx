@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { api } from "./api";
-import { DEFAULT_SETTINGS, Language, PostProcess, Settings, MicDevice, ModelFile, HistoryEntry } from "./types";
+import { DEFAULT_SETTINGS, Language, PostProcess, Settings, MicDevice, ModelFile, HistoryEntry, DictEntry } from "./types";
 
 const MODEL_SIZES: { id: string; size: string }[] = [
   { id: "tiny", size: "75 MB" },
@@ -66,6 +66,12 @@ function Icon({ name }: { name: string }) {
       <>
         <rect x="9" y="9" width="11" height="11" rx="2" stroke={stroke} strokeWidth={sw} />
         <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke={stroke} strokeWidth={sw} />
+      </>
+    ),
+    book: (
+      <>
+        <path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2V5z" stroke={stroke} strokeWidth={sw} strokeLinejoin="round" />
+        <path d="M4 19a2 2 0 012-2h13M8 7h7" stroke={stroke} strokeWidth={sw} strokeLinecap="round" />
       </>
     ),
     trash: (
@@ -144,7 +150,7 @@ function formatStamp(ms: number): { date: string; time: string } {
   };
 }
 
-type View = "history" | "settings";
+type View = "history" | "dictionary" | "settings";
 
 export default function App() {
   const [view, setView] = useState<View>("settings");
@@ -156,6 +162,7 @@ export default function App() {
   const [hotkeyEdit, setHotkeyEdit] = useState<HotkeyKind | null>(null);
   const [hotkeyBuffer, setHotkeyBuffer] = useState("");
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [confirmKeyEdit, setConfirmKeyEdit] = useState(false);
   const [toast, setToast] = useState<{ msg: string; kind: "info" | "error" } | null>(null);
 
   const refresh = async () => {
@@ -179,9 +186,13 @@ export default function App() {
     const unHist = listen("history-updated", () => {
       refreshHistory();
     });
+    const unSett = listen("settings-updated", async () => {
+      setSettings(await api.getSettings());
+    });
     return () => {
       unErr.then((f) => f());
       unHist.then((f) => f());
+      unSett.then((f) => f());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -279,6 +290,60 @@ export default function App() {
     await refreshHistory();
     flash("History cleared");
   };
+
+  const setDict = (next: DictEntry[]) => update("dictionary", next);
+  const addDictEntry = () => setDict([...settings.dictionary, { from: "", to: "" }]);
+  const editDictEntry = (i: number, patch: Partial<DictEntry>) =>
+    setDict(settings.dictionary.map((d, j) => (j === i ? { ...d, ...patch } : d)));
+  const removeDictEntry = (i: number) =>
+    setDict(settings.dictionary.filter((_, j) => j !== i));
+
+  const dictionaryView = (
+    <div className="content">
+      <header className="page-head">
+        <div className="row between">
+          <h1>Dictionary</h1>
+          <button className="primary" onClick={addDictEntry}>Add word</button>
+        </div>
+        <p>
+          Fix words Whisper keeps mishearing. "Correct word" is also fed to the model as a
+          vocabulary hint; leave "Heard as" empty to only hint without replacing.
+        </p>
+      </header>
+
+      {settings.dictionary.length === 0 ? (
+        <div className="history-empty">
+          <Icon name="book" />
+          <p>No entries yet. Example: heard as <span className="kbd">cloud</span> → correct word <span className="kbd">Claude</span>.</p>
+        </div>
+      ) : (
+        <div className="dict-list">
+          <div className="dict-row dict-head">
+            <span>Heard as (optional)</span>
+            <span>Correct word</span>
+            <span />
+          </div>
+          {settings.dictionary.map((d, i) => (
+            <div className="dict-row" key={i}>
+              <input
+                value={d.from}
+                placeholder="cloud"
+                onChange={(e) => editDictEntry(i, { from: e.target.value })}
+              />
+              <input
+                value={d.to}
+                placeholder="Claude"
+                onChange={(e) => editDictEntry(i, { to: e.target.value })}
+              />
+              <button className="ghost icon-btn" title="Remove" onClick={() => removeDictEntry(i)}>
+                <Icon name="trash" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const historyView = (
     <div className="content">
@@ -439,6 +504,52 @@ export default function App() {
 
           <section className="section">
             <div className="section-meta">
+              <h3>Review before paste</h3>
+              <p>Show the transcript in the overlay for a quick edit before pasting. Corrections teach the dictionary automatically.</p>
+            </div>
+            <div className="section-body">
+              <div className="row between">
+                <div style={{ fontSize: 13 }}>Enable review mode</div>
+                <div
+                  className={`switch ${settings.reviewMode ? "on" : ""}`}
+                  role="switch"
+                  aria-checked={settings.reviewMode}
+                  tabIndex={0}
+                  onClick={() => update("reviewMode", !settings.reviewMode)}
+                />
+              </div>
+              <div className="hotkey-row">
+                <div className="hotkey-label">Confirm &amp; paste key</div>
+                {confirmKeyEdit ? (
+                  <div className="hotkey-edit">
+                    <input
+                      autoFocus
+                      readOnly
+                      placeholder="Press a key…"
+                      value={settings.confirmKey}
+                      onKeyDown={(e) => {
+                        e.preventDefault();
+                        if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+                        update("confirmKey", e.key);
+                        setConfirmKeyEdit(false);
+                      }}
+                    />
+                    <button onClick={() => setConfirmKeyEdit(false)}>Cancel</button>
+                  </div>
+                ) : (
+                  <div className="hotkey-show">
+                    <div className="keys">
+                      <span className="kbd">{settings.confirmKey}</span>
+                    </div>
+                    <button onClick={() => setConfirmKeyEdit(true)}>Change</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="section">
+            <div className="section-meta">
               <h3>Global shortcuts</h3>
               <p>Triggered system-wide. Cancel stops dictation immediately without transcribing or pasting.</p>
             </div>
@@ -532,6 +643,13 @@ export default function App() {
             History
           </div>
           <div
+            className={`nav-item ${view === "dictionary" ? "active" : ""}`}
+            onClick={() => setView("dictionary")}
+          >
+            <Icon name="book" />
+            Dictionary
+          </div>
+          <div
             className={`nav-item ${view === "settings" ? "active" : ""}`}
             onClick={() => setView("settings")}
           >
@@ -548,7 +666,9 @@ export default function App() {
       <main className="main">
         <div className="topbar">
           <div className="crumbs">
-            <strong>{view === "history" ? "History" : "Settings"}</strong>
+            <strong>
+              {view === "history" ? "History" : view === "dictionary" ? "Dictionary" : "Settings"}
+            </strong>
           </div>
           <div className="topbar-right">
             <span className="kbd">{parseHotkey(settings.hotkey).join(" + ") || "—"}</span>
@@ -556,7 +676,7 @@ export default function App() {
           </div>
         </div>
 
-        {view === "history" ? historyView : settingsView}
+        {view === "history" ? historyView : view === "dictionary" ? dictionaryView : settingsView}
       </main>
 
       {toast && (

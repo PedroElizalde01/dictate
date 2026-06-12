@@ -1,6 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DictEntry {
+    /// Misheard word to replace (empty = vocabulary hint only).
+    #[serde(default)]
+    pub from: String,
+    /// Correct word. Also fed to whisper as a vocabulary bias prompt.
+    #[serde(default)]
+    pub to: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -14,10 +25,17 @@ pub struct Settings {
     pub language: String,
     pub post_process: String,
     pub autostart: bool,
+    #[serde(default)]
+    pub dictionary: Vec<DictEntry>,
+    #[serde(default)]
+    pub review_mode: bool,
+    #[serde(default = "default_confirm_key")]
+    pub confirm_key: String,
 }
 
 fn default_cancel() -> String { "CmdOrCtrl+Shift+X".into() }
 fn default_settings_sc() -> String { "CmdOrCtrl+Shift+,".into() }
+fn default_confirm_key() -> String { "Tab".into() }
 
 impl Default for Settings {
     fn default() -> Self {
@@ -30,6 +48,9 @@ impl Default for Settings {
             language: "auto".into(),
             post_process: "cleanup".into(),
             autostart: false,
+            dictionary: Vec::new(),
+            review_mode: false,
+            confirm_key: default_confirm_key(),
         }
     }
 }

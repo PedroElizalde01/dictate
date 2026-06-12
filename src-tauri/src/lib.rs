@@ -1,6 +1,7 @@
 mod audio;
 mod cleanup;
 mod config;
+mod dictionary;
 mod history;
 mod models;
 mod paste;
@@ -22,11 +23,17 @@ use std::str::FromStr;
 use crate::audio::AudioController;
 use crate::config::Settings;
 
+struct PendingReview {
+    original: String,
+    target: Option<String>,
+}
+
 struct AppState {
     audio: AudioController,
     is_recording: Mutex<bool>,
     target_window: Mutex<Option<String>>,
     settings: Mutex<Settings>,
+    pending_review: Mutex<Option<PendingReview>>,
     dictate_sc: Mutex<Option<Shortcut>>,
     cancel_sc: Mutex<Option<Shortcut>>,
     settings_sc: Mutex<Option<Shortcut>>,
@@ -50,6 +57,13 @@ fn rebind(
 #[derive(Serialize, Clone)]
 struct PhasePayload {
     phase: &'static str,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ReviewPayload {
+    text: String,
+    confirm_key: String,
 }
 
 #[tauri::command]
@@ -152,11 +166,15 @@ fn do_toggle(app: AppHandle, state: Arc<AppState>) {
         let app2 = app.clone();
         let state2 = state.clone();
         std::thread::spawn(move || {
-            let result = finish_dictation(&app2, &state2);
-            if let Err(e) = result {
-                let msg = format!("{e}");
-                eprintln!("dictation error: {msg}");
-                let _ = app2.emit("dictate-error", msg);
+            match finish_dictation(&app2, &state2) {
+                // review pending: overlay stays open with the editable text
+                Ok(false) => return,
+                Ok(true) => {}
+                Err(e) => {
+                    let msg = format!("{e}");
+                    eprintln!("dictation error: {msg}");
+                    let _ = app2.emit("dictate-error", msg);
+                }
             }
             let _ = app2.emit("dictate-phase", PhasePayload { phase: "exit" });
             std::thread::sleep(std::time::Duration::from_millis(260));
@@ -184,7 +202,8 @@ fn do_toggle(app: AppHandle, state: Arc<AppState>) {
 }
 
 
-fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()> {
+/// Returns Ok(false) when review mode kept the overlay open, Ok(true) when done.
+fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<bool> {
     let settings = state.settings.lock().clone();
     let model_path = settings
         .model_path
@@ -214,11 +233,13 @@ fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()
     let tmp = config::data_dir().join(format!("rec-{stamp}.wav"));
     audio::write_wav_16k(&tmp, &samples, src_rate)?;
 
+    let prompt = dictionary::vocab_prompt(&settings.dictionary);
     let text = whisper::transcribe(
         &bin,
         std::path::Path::new(model_path),
         &tmp,
         &settings.language,
+        prompt.as_deref(),
     )?;
     let _ = std::fs::remove_file(&tmp);
     eprintln!("transcribed ({dur_s:.2}s, {} chars): {text:?}", text.len());
@@ -228,10 +249,26 @@ fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()
     } else {
         text
     };
+    let final_text = dictionary::apply(&final_text, &settings.dictionary);
     if final_text.is_empty() {
         let _ = app.emit("dictate-error", "empty transcription");
-        return Ok(());
+        return Ok(true);
     }
+
+    if settings.review_mode {
+        *state.pending_review.lock() = Some(PendingReview {
+            original: final_text.clone(),
+            target: state.target_window.lock().clone(),
+        });
+        layout_overlay(app, 480.0, 200.0, true);
+        let _ = app.emit("dictate-phase", PhasePayload { phase: "review" });
+        let _ = app.emit(
+            "review-text",
+            ReviewPayload { text: final_text, confirm_key: settings.confirm_key.clone() },
+        );
+        return Ok(false);
+    }
+
     if let Err(e) = history::add_entry(&final_text) {
         eprintln!("history save failed: {e}");
     }
@@ -243,7 +280,66 @@ fn finish_dictation(app: &AppHandle, state: &Arc<AppState>) -> anyhow::Result<()
     std::thread::sleep(std::time::Duration::from_millis(60));
     eprintln!("paste -> target {target:?}, {} chars", final_text.len());
     paste::type_text(&final_text, target.as_deref())?;
-    Ok(())
+    Ok(true)
+}
+
+#[tauri::command]
+fn confirm_review(text: String, app: AppHandle, state: tauri::State<Arc<AppState>>) {
+    let Some(pending) = state.pending_review.lock().take() else { return };
+    let state2 = state.inner().clone();
+    std::thread::spawn(move || {
+        let edited = text.trim().to_string();
+
+        // learn replacement pairs from the user's edits
+        let learned = dictionary::learn(&pending.original, &edited);
+        if !learned.is_empty() {
+            let mut s = state2.settings.lock();
+            let mut changed = false;
+            for e in learned {
+                eprintln!("dictionary learned: {} -> {}", e.from, e.to);
+                changed |= dictionary::merge_entry(&mut s.dictionary, e);
+            }
+            let snapshot = s.clone();
+            drop(s);
+            if changed {
+                let _ = config::save_settings(&snapshot);
+                let _ = app.emit("settings-updated", ());
+            }
+        }
+
+        if !edited.is_empty() {
+            if let Err(e) = history::add_entry(&edited) {
+                eprintln!("history save failed: {e}");
+            }
+            let _ = app.emit("history-updated", ());
+        }
+
+        let _ = app.emit("dictate-phase", PhasePayload { phase: "exit" });
+        std::thread::sleep(std::time::Duration::from_millis(220));
+        hide_overlay(&app);
+        layout_overlay(&app, 220.0, 60.0, false);
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        if !edited.is_empty() {
+            eprintln!("paste -> target {:?}, {} chars", pending.target, edited.len());
+            if let Err(e) = paste::type_text(&edited, pending.target.as_deref()) {
+                let _ = app.emit("dictate-error", format!("paste failed: {e}"));
+            }
+        }
+    });
+}
+
+#[tauri::command]
+fn cancel_review(app: AppHandle, state: tauri::State<Arc<AppState>>) {
+    if state.pending_review.lock().take().is_none() {
+        return;
+    }
+    std::thread::spawn(move || {
+        let _ = app.emit("dictate-phase", PhasePayload { phase: "exit" });
+        std::thread::sleep(std::time::Duration::from_millis(220));
+        hide_overlay(&app);
+        layout_overlay(&app, 220.0, 60.0, false);
+        eprintln!("review discarded");
+    });
 }
 
 fn do_cancel(app: AppHandle, state: Arc<AppState>) {
@@ -271,20 +367,54 @@ fn do_show_settings(app: AppHandle) {
     }
 }
 
+/// Monitor the overlay should appear on: under the cursor first (the overlay
+/// keeps its last position, so current_monitor() points at the wrong screen
+/// after the user moves to another display), then current, then primary.
+fn target_monitor(h: &AppHandle, w: &tauri::WebviewWindow) -> Option<tauri::Monitor> {
+    h.cursor_position()
+        .ok()
+        .and_then(|p| h.monitor_from_point(p.x, p.y).ok().flatten())
+        .or_else(|| w.current_monitor().ok().flatten())
+        .or_else(|| w.primary_monitor().ok().flatten())
+}
+
+/// Bottom-center the overlay on `monitor` given its logical size.
+fn position_overlay(w: &tauri::WebviewWindow, monitor: &tauri::Monitor, w_log: f64, h_log: f64) {
+    let size = monitor.size();
+    let pos = monitor.position();
+    let scale = monitor.scale_factor();
+    let win_w = (w_log * scale) as i32;
+    let win_h = (h_log * scale) as i32;
+    let x = pos.x + (size.width as i32 - win_w) / 2;
+    let y = pos.y + size.height as i32 - win_h - (40.0 * scale) as i32;
+    let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
 fn show_overlay(app: &AppHandle) {
     let h = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(w) = h.get_webview_window("overlay") {
-            if let Some(monitor) = w.current_monitor().ok().flatten() {
-                let size = monitor.size();
-                let scale = monitor.scale_factor();
-                let win_w = (220.0 * scale) as i32;
-                let win_h = (60.0 * scale) as i32;
-                let x = (size.width as i32 - win_w) / 2;
-                let y = size.height as i32 - win_h - (40.0 * scale) as i32;
-                let _ = w.set_position(tauri::PhysicalPosition::new(x, y));
+            if let Some(monitor) = target_monitor(&h, &w) {
+                position_overlay(&w, &monitor, 220.0, 60.0);
             }
             let _ = w.show();
+        }
+    });
+}
+
+/// Resize + reposition the overlay (logical units, bottom-center).
+/// `focus` grabs keyboard focus, needed for review editing.
+fn layout_overlay(app: &AppHandle, w_log: f64, h_log: f64, focus: bool) {
+    let h = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(w) = h.get_webview_window("overlay") {
+            let _ = w.set_size(tauri::LogicalSize::new(w_log, h_log));
+            if let Some(monitor) = target_monitor(&h, &w) {
+                position_overlay(&w, &monitor, w_log, h_log);
+            }
+            if focus {
+                let _ = w.set_focus();
+            }
         }
     });
 }
@@ -344,6 +474,8 @@ pub fn run() {
             get_history,
             delete_history_entry,
             clear_history,
+            confirm_review,
+            cancel_review,
             hide_main,
             show_main,
             toggle_dictate,
@@ -356,6 +488,7 @@ pub fn run() {
                 is_recording: Mutex::new(false),
                 target_window: Mutex::new(None),
                 settings: Mutex::new(initial.clone()),
+                pending_review: Mutex::new(None),
                 dictate_sc: Mutex::new(None),
                 cancel_sc: Mutex::new(None),
                 settings_sc: Mutex::new(None),

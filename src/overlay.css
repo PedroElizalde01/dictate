@@ -52,6 +52,55 @@ html, body { margin: 0; padding: 0; background: transparent; overflow: hidden; f
   transform: scale(0.2);
   border-radius: 50%;
 }
+.pill.review {
+  width: 460px;
+  height: 180px;
+  border-radius: 14px;
+  opacity: 1;
+  transform: scale(1);
+  border-color: oklch(0.50 0.16 285 / 0.6);
+}
+
+.review {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px 8px;
+}
+.review textarea {
+  flex: 1;
+  background: transparent;
+  border: 0;
+  outline: none;
+  resize: none;
+  font: 13.5px/1.55 ui-sans-serif, system-ui, sans-serif;
+  /* preview state: grayed out until confirmed */
+  color: oklch(0.78 0.008 275 / 0.75);
+  caret-color: oklch(0.78 0.16 285);
+}
+.review textarea::selection {
+  background: oklch(0.55 0.22 285 / 0.32);
+}
+.review-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  font-size: 11px;
+  color: oklch(0.55 0.012 275);
+}
+.review-hint .sep { opacity: 0.5; }
+.okbd {
+  padding: 1px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  background: oklch(0.22 0.016 275);
+  border: 1px solid oklch(0.32 0.018 275);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  color: oklch(0.78 0.01 275);
+}
 
 .bars {
   position: absolute;

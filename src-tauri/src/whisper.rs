@@ -13,11 +13,15 @@ pub fn transcribe(
     model: &Path,
     wav: &Path,
     language: &str,
+    prompt: Option<&str>,
 ) -> Result<String> {
     let mut cmd = Command::new(binary);
     cmd.arg("-m").arg(model);
     cmd.arg("-f").arg(wav);
     cmd.arg("-l").arg(language);
+    if let Some(p) = prompt {
+        cmd.arg("--prompt").arg(p);
+    }
     cmd.arg("-nt"); // no timestamps
     cmd.arg("-otxt");
     cmd.arg("-of").arg(wav.with_extension("").as_os_str());

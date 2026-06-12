@@ -49,7 +49,7 @@ body {
 
 .shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 204px 1fr;
   height: 100vh;
   min-height: 0;
 }
@@ -331,6 +331,21 @@ button.ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--te
 }
 .history-empty p { margin: 0; font-size: 12.5px; }
 
+.dict-list { display: flex; flex-direction: column; gap: 8px; }
+.dict-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 34px;
+  gap: 8px;
+  align-items: center;
+}
+.dict-row.dict-head {
+  color: var(--text-subtle);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 2px;
+}
+
 .toast {
   position: fixed; bottom: 18px; right: 18px;
   background: var(--bg-elev);
@@ -365,6 +380,6 @@ button.ghost:hover:not(:disabled) { background: var(--bg-hover); color: var(--te
 .section:nth-of-type(6) { animation-delay: 220ms; }
 
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 200px 1fr; }
+  .shell { grid-template-columns: 170px 1fr; }
   .section { grid-template-columns: 1fr; gap: 12px; }
 }
